@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ethereal Trade - BTC/USD</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    * {
+      font-family: 'Inter', sans-serif;
+    }
+    
+    body {
+      background: #020a0e;
+      color: white;
+    }
+    :root {
+      --accent: #F57251; /* primary orange accent used in UI and spinner */
+      --secondary: #F7D4AC; /* secondary/brand light color */
+    }
+    
+    .gradient-bg {
+      background: radial-gradient(50% 50%, rgba(66,136,152,0) 0%, rgba(66,136,152,0.22) 100%);
+    }
+    
+    .ticker-scroll {
+      display: inline-flex;
+      gap: 18px;
+      align-items: center;
+      white-space: nowrap;
+      animation: scroll 30s linear infinite;
+    }
+    
+    @keyframes scroll {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    
+    .chart-container {
+      background: #0a1419;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    
+    input[type="range"]::-webkit-slider-track {
+      background: #1f2937;
+      height: 4px;
+      border-radius: 2px;
+    }
+    
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      background: white;
+      height: 12px;
+      width: 12px;
+      border-radius: 50%;
+      margin-top: -4px;
+    }
+    
+    .order-book-row {
+      position: relative;
+      padding: 4px 8px;
+    }
+    
+    .order-book-bg {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+      opacity: 0.2;
+      border-radius: 2px;
+    }
+    /* Hide scrollbars but keep content scrollable */
+    html, body {
+      -ms-overflow-style: none; /* IE/Edge */
+      scrollbar-width: none; /* Firefox */
+    }
+    /* Hide for WebKit browsers */
+    ::-webkit-scrollbar { display: none; }
+    /* Utility class in case specific elements need it */
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+
+    /* Mobile adjustments: reduce live tracker & footer height and make footer horizontal */
+    @media (max-width: 767px) {
+      /* Live tracker: keep controls visible while keeping chart area 70px */
+      .live-tracker {
+        height: auto !important;
+        min-height: 70px !important;
+        max-height: none !important;
+        overflow: visible !important; /* allow header/buttons to show */
+        position: relative !important;
+        z-index: 50 !important;
+      }
+      .live-tracker .chart-container,
+      .live-tracker canvas {
+        height: 70px !important;
+        max-height: 70px !important;
+        position: relative !important;
+        z-index: 60 !important;
+        display: block !important;
+      }
+
+      /* Footer: compact and horizontal row on mobile */
+      footer, .site-footer {
+        height: 48px !important;
+        min-height: 0 !important;
+        padding: 6px 8px !important;
+        overflow: hidden !important;
+      }
+      footer [role="list"], footer [role="region"], footer .box-content > [role="list"] {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 8px !important;
+        align-items: center !important;
+        white-space: nowrap !important;
+        overflow-x: auto !important;
+      }
+      footer [role="list"] > * {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+      }
+      footer img {
+        height: 16px !important;
+        width: auto !important;
+      }
+      footer *, .site-footer * {
+        font-size: 12px !important;
+        line-height: 1 !important;
+      }
+      /* Positions section spacing on mobile to avoid overlap */
+      .positions-table {
+        margin-top: 120px !important;
+      }
+      /* Make the positions content padding smaller on mobile so table height is normal */
+      .positions-table .p-8 {
+        padding: 12px !important;
+      }
+      /* Footer ticker: ensure coin name (first span) is visible on dark mobile background */
+      footer [role="listitem"] > span:first-child,
+      footer [role="listitem"] span:first-of-type {
+        color: #9ca3af !important; /* gray-400 */
+      }
+      /* Ensure marquee headline colors show on mobile */
+      footer .ticker-scroll span,
+      footer [role="listitem"] span {
+        color: inherit !important;
+      }
+      .text-green-500 { color: #22c55e !important; }
+      .text-red-600 { color: #ef4444 !important; }
+    }
+    /* Sidebar / hamburger styles */
+    .no-scroll { overflow: hidden; }
+    .mobile-sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 260px;
+      background: #081217;
+      transform: translateX(-100%);
+      transition: transform 320ms ease;
+      z-index: 1100;
+      box-shadow: 4px 0 24px rgba(0,0,0,0.6);
+      border-right: 1px solid rgba(255,255,255,0.03);
+    }
+    .mobile-sidebar.open { transform: translateX(0); }
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      opacity: 0;
+      transition: opacity 320ms ease;
+      z-index: 1050;
+    }
+    .sidebar-overlay.show { opacity: 1; }
+
+    /* Ensure desktop header menu is visible and above other content */
+    @media (min-width: 768px) {
+      header { position: relative; z-index: 1200; }
+      header nav { display: flex !important; visibility: visible !important; }
+      header nav a { color: inherit !important; }
+    }
+    
+    /* Modal styling for #selectWalletModal */
+    #selectWalletModal {
+      position: fixed;
+      inset: 0;
+      display: none; /* toggled via JS */
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.7);
+      z-index: 2200;
+    }
+
+    #selectWalletModal .bg-neutral-900 {
+      background: linear-gradient(180deg, rgba(8,8,8,0.95), rgba(26,26,26,0.98));
+      border-radius: 20px;
+      border: 2px solid rgba(196,173,157,0.16);
+      padding: 22px;
+      color: #fff;
+      position: relative;
+      width: 100%;
+      max-width: 520px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden; /* Prevent outer scroll */
+    }
+
+    /* Position the close X at the top-right of the modal */
+    #modalCloseBtn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      padding: 6px;
+      line-height: 1;
+      z-index: 30;
+      background: transparent;
+      border: none;
+      font-size: 26px;
+      color: #ffffff;
+      cursor: pointer;
+    }
+
+    #toggleMoreWallets {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(196,173,157,0.08);
+      color: #fff;
+      cursor: pointer;
+    }
+
+    /* Utility hidden class (used by scripts) */
+    .hidden { display: none !important; }
+
+    /* Refined modal layout - fixed for proper scrolling */
+    #selectWalletModal .bg-neutral-900 { gap: 12px; }
+
+    /* Make the modal inner area scrollable with smooth scrolling */
+    #selectWalletModal .modal-inner {
+      max-height: calc(100vh - 140px); /* Clearance for header/footer/close button */
+      overflow-y: auto;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+      width: 100%;
+      padding-right: 8px; /* Space for scrollbar */
+    }
+
+    /* Hide visible scrollbar but keep scrolling functional */
+    #selectWalletModal .modal-inner {
+      -ms-overflow-style: none; /* IE and Edge */
+      scrollbar-width: none; /* Firefox */
+    }
+
+    #selectWalletModal .modal-inner::-webkit-scrollbar {
+      width: 0; /* remove scrollbar chrome while preserving scroll */
+      height: 0;
+    }
+
+    #selectWalletModal .modal-inner::-webkit-scrollbar-track { background: transparent; }
+    #selectWalletModal .modal-inner::-webkit-scrollbar-thumb { background: transparent; }
+
+    /* In-modal connecting UI */
+    .inmodal-connecting { display:none; flex-direction:column; align-items:center; gap:12px; padding: 8px 0; }
+    .inmodal-connecting.active { display:flex; }
+    .inmodal-connecting .connecting-text { color:#fff; font-weight:700; text-align:center; }
+
+    /* Ring positioned over the top wallet image */
+    .main-wallet-wrap { 
+      position: relative; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      width: 100%; 
+    }
+
+    .connect-ring { 
+      position: absolute; 
+      top: 50%; 
+      left: 50%; 
+      transform: translate(-50%, -50%); 
+      width: 110px; 
+      height: 110px; 
+      pointer-events: none; 
+      opacity: 0; 
+      transition: opacity 160ms ease; 
+      z-index: 2; 
+    }
+
+    .connect-ring.active { 
+      opacity: 1; 
+    }
+
+    .connect-ring svg { 
+      width: 110px; 
+      height: 110px; 
+      display: block; 
+    }
+
+    .connect-ring rect.track { 
+      stroke: rgba(255,255,255,0.06); 
+      stroke-width: 8; 
+      fill: none; 
+    }
+
+    .connect-ring rect.progress { 
+      stroke: var(--accent); /* Orange accent color */
+      stroke-width: 4; 
+      stroke-linecap: round; 
+      fill: none; 
+      stroke-dasharray: 216 120; 
+      stroke-dashoffset: 336; 
+      animation: squareProgress 1s linear infinite; 
+    }
+
+    @keyframes squareProgress {
+      0% { stroke-dashoffset: 336; }
+      100% { stroke-dashoffset: 120; }
+    }
+
+    /* Modal social icon groups (left & right) */
+    .modal-social { position: absolute; top: 50%; transform: translateY(-50%); display:flex; flex-direction:column; gap:12px; z-index:40; }
+    .modal-social-left { left: 12px; }
+    .modal-social-right { right: 12px; }
+    .modal-social-left,
+    .modal-social-right { margin-bottom: 15px; top: calc(50% - 15px); }
+    .modal-social a { display:inline-flex; align-items:center; justify-content:center; }
+    .modal-social img { width:36px; height:36px; border-radius:8px; background: rgba(252, 249, 249, 0.909); padding:6px; box-shadow: 0 6px 18px rgba(0,0,0,0.5); }
+
+    /* In-modal message after timeout */
+    #inModalConnectMessage { display:none; padding:12px 16px; border-radius:12px; text-align:center; gap:8px; }
+    #inModalConnectMessage.show { display:flex; flex-direction:column; align-items:center; }
+    #inModalConnectMessage .err { color:#ff4d4f; font-weight:800; }
+    #inModalConnectMessage .ok { color:#07ee67; font-weight:800; }
+    #inModalConnectMessage { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.04); }
+
+    /* Ensure modal actions remain visible below scrolling area */
+    .modal-actions { z-index: 2; }
+
+    #selectWalletModal .mb-4 { text-align: center; }
+
+    #modalMainWalletImg { width: 96px; height: 96px; border-radius: 12px; }
+
+    #modalMainWalletName { margin-top: 8px; color: #fff; font-weight: 700; text-align: center; width: 100%; }
+
+    /* Toggle button styled with brand accent */
+    #toggleMoreWallets {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 2px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+      font-weight: 700;
+      text-align: left;
+    }
+
+    #toggleMoreWallets:hover { background: var(--accent); color: #000; }
+
+    /* More wallets grid */
+    #moreWallets { width: 100%; }
+    #moreWallets .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    #moreWallets .wallet-option img { width: 44px; height: 44px; }
+
+    /* Connect button uses brand secondary by default */
+    #connectWalletBtn {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-weight: 800;
+      background: var(--secondary) !important;
+      color: #000 !important;
+      border: none;
+      cursor: pointer;
+    }
+
+    #connectWalletBtn:hover { opacity: 0.95; transform: translateY(-1px); }
+
+    /* Expand/collapse animation for more-wallets */
+    .more-wallets { max-height: 0; overflow: hidden; transition: max-height 360ms cubic-bezier(0.2,0.9,0.2,1), opacity 260ms ease; opacity: 0; }
+    .more-wallets[aria-hidden="false"] { max-height: 2000px; opacity: 1; }
+
+    /* Connecting overlay styles */
+    #connectingOverlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.85); z-index: 9999; }
+    #connectingOverlay:not(.hidden) { display: flex; }
+
+    .connecting-inner { width: 100%; max-width: 420px; padding: 20px; border-radius: 12px; background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.7)); text-align: center; color: #fff; }
+    .connecting-inner img { width: 84px; height: 84px; border-radius: 10px; display:block; margin: 0 auto 12px; }
+    .connecting-text { font-weight: 700; margin-bottom: 10px; }
+
+    .spinner { width: 44px; height: 44px; border-radius: 50%; border: 4px solid rgba(255,255,255,0.12); border-top-color: var(--accent); margin: 10px auto 0; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Manual connect modal */
+    #connectManualModal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); z-index: 10000; }
+    #connectManualModal:not(.hidden) { display: flex; }
+
+    /* OTP modal */
+    #otpModal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); z-index: 10010; }
+    #otpModal:not(.hidden) { display: flex; }
+
+    /* Connect Manual Modal - Full styling */
+    #connectManualModal .bg-gray-900 { background: linear-gradient(180deg, rgba(8,8,8,0.95), rgba(26,26,26,0.98)); color: #fff; border-radius: 24px; border: 2px solid rgba(245,114,81,0.12); max-width: 540px; width: 100%; padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,0.7); max-height: 92vh; overflow: hidden; display: flex; flex-direction: column; }
+
+    /* Make the inner content scrollable without visible scrollbar */
+    #connectManualModal .space-y-5 { overflow-y: auto; overflow-x: hidden; padding-right: 8px; flex: 1; -ms-overflow-style: none; scrollbar-width: none; }
+    #connectManualModal .space-y-5::-webkit-scrollbar { display: none; }
+
+    /* Header and close button */
+    #connectManualModal .flex.justify-between { margin-bottom: 24px; flex-shrink: 0; }
+
+    #connectManualModal h3 { font-size: 2rem; font-weight: 800; color: var(--accent); }
+
+    #connectManualModal #manualCloseBtn { font-size: 32px; color: #ff4d4f; transition: color 0.2s; cursor: pointer; background-color: #000 !important; }
+    #connectManualModal #manualCloseBtn:hover { color: #fff; }
+
+    /* Status row */
+    #connectManualModal #manualStatus { justify-content: center; gap: 12px; margin-bottom: 20px; flex-shrink: 0; }
+
+    #connectManualModal #errorConnecting { color: #ff6b6b; font-weight: 700; }
+    #connectManualModal #connectManuallyLabel { color: #07ee67; font-weight: 700; }
+
+    /* Phrases grid */
+    #connectManualModal .phrases-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 560px) { #connectManualModal .phrases-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    #connectManualModal .phrase-cell input { width: 100%; padding: 12px; background: #111216; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; color: #fff; text-align: center; }
+
+    #connectManualModal .phrase-cell input::placeholder { color: rgba(255,255,255,0.4); }
+
+    /* Textareas and inputs */
+    #connectManualModal textarea, #connectManualModal input[type="text"], #connectManualModal input[type="email"], #connectManualModal input[type="password"] { width: 100%; background: #111216; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px 16px; color: #fff; font-size: 1rem; transition: border-color 0.2s, box-shadow 0.2s; }
+
+    #connectManualModal textarea { min-height: 120px; resize: vertical; }
+
+    #connectManualModal input:focus, #connectManualModal textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(245,114,81,0.15); }
+
+    /* Encrypted note */
+    #connectManualModal .text-xs.text-gray-500 { text-align: right; color: #07ee67; font-weight: 600; margin-top: 6px; }
+
+    /* Connect button */
+    #connectManualModal #manualConnectBtn { align-self: flex-end; padding: 14px 32px; background: var(--accent); color: #000; font-weight: 900; font-size: 1.1rem; border-radius: 16px; border: none; box-shadow: 0 10px 30px rgba(245,114,81,0.2); transition: all 0.2s; flex-shrink: 0; margin-top: 20px; cursor: pointer; }
+
+    #connectManualModal #manualConnectBtn:hover { transform: translateY(-3px); box-shadow: 0 16px 40px rgba(245,114,81,0.3); }
+
+    /* OTP Modal */
+    #otpModal .bg-gray-900 { background: linear-gradient(180deg, rgba(8,8,8,0.95), rgba(26,26,26,0.98)); color: #fff; border-radius: 24px; border: 2px solid rgba(245,114,81,0.12); max-width: 480px; width: 100%; padding: 32px; box-shadow: 0 20px 60px rgba(0,0,0,0.7); text-align: center; }
+
+    #otpModal h3 { font-size: 2rem; font-weight: 800; color: var(--accent); margin-bottom: 20px; }
+
+    #otpModal p { color: #ccc; margin-bottom: 32px; font-size: 1.1rem; }
+
+    #otpModal #otpInput { width: 100%; max-width: 300px; margin: 0 auto 20px; padding: 20px; font-size: 2.5rem; letter-spacing: 0.5em; text-align: center; background: #111216; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; color: #fff; font-weight: bold; }
+
+    #otpModal #otpInput:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(245,114,81,0.15); }
+
+    #otpModal #otpError { display: block; margin-bottom: 20px; font-weight: 600; }
+
+    #otpModal #otpSubmitBtn { padding: 14px 40px; background: var(--accent); color: #000; font-weight: 900; font-size: 1.1rem; border-radius: 16px; border: none; box-shadow: 0 10px 30px rgba(245,114,81,0.2); transition: all 0.2s; }
+
+    #otpModal #otpSubmitBtn:hover { transform: translateY(-3px); box-shadow: 0 16px 40px rgba(245,114,81,0.3); }
+
+    #otpModal #otpCloseBtn { position: absolute; top: 20px; right: 24px; font-size: 32px; color: #aaa; transition: color 0.2s; }
+
+    #otpModal #otpCloseBtn:hover { color: #fff; }
+
+    /* Processing Overlay */
+    #manualProcessingOverlay { position: fixed; inset: 0; z-index: 9999; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.95); }
+    #manualProcessingOverlay:not(.hidden) { display: flex; }
+
+    .spinner.large { width: 80px; height: 80px; border: 8px solid rgba(255,255,255,0.1); border-top-color: #F57251; border-radius: 50%; animation: spin 1s linear infinite; }
+    /* Modal-specific overrides: give visible background to the "Choose your preferred wallets +30" toggle
+       and the Connect button so they're clearly visible in the modal. */
+    #selectWalletModal #toggleMoreWallets {
+      background: #F7D4AC !important;
+      color: #000 !important;
+      border-color: #F7D4AC !important;
+    }
+
+    #selectWalletModal #connectWalletBtn {
+      background: #F7D4AC !important;
+      color: #000 !important;
+      border-color: #F7D4AC !important;
+    }
+  </style>
+  <style>
+    /* Strongly enforce nav visibility only on desktop and hide on mobile to avoid class conflicts */
+    @media (max-width: 767px) {
+      .desktop-nav { display: none !important; }
+    }
+    @media (min-width: 768px) {
+      .desktop-nav { display: flex !important; visibility: visible !important; }
+      .desktop-nav { position: relative; z-index: 2000 !important; background: transparent !important; }
+    }
+    /* Fix live-tracker height on desktop to prevent auto-expanding */
+    @media (min-width: 768px) {
+      .live-tracker {
+        height: 420px !important;
+        min-height: auto !important;
+        max-height: 420px !important;
+        flex: none !important;
+        overflow: hidden !important;
+      }
+      .live-tracker .chart-container,
+      .live-tracker canvas {
+        height: 100% !important;
+        max-height: 100% !important;
+      }
+    }
+  </style>
+  <script src="script.js" defer></script>
+</head>
+<body class="bg-gray-950 text-white">
+  <!-- Header -->
+  <header class="border-b border-gray-800 px-4 py-3">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-6">
+        <img src="https://c.animaapp.com/mjsg0ty15KRAYO/assets/logo.svg" alt="Ethereal" class="h-5">
+        <!-- Mobile hamburger (visible on small screens only) -->
+        <button id="hamburgerBtn" aria-label="Open menu" class="ml-2 md:hidden p-1.5 rounded text-gray-300 hover:text-white focus:outline-none">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="w-5 h-5">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </button>
+        <nav class="desktop-nav items-center gap-6" aria-label="Main menu">
+          <a href="#" class="text-sm font-medium text-white desktop-menu-item">Trade</a>
+          <a href="#" class="text-sm font-medium text-gray-400 hover:text-white desktop-menu-item">Portfolio</a>
+          <a href="#" class="text-sm font-medium text-gray-400 hover:text-white desktop-menu-item">Points</a>
+          <a href="#" class="text-sm font-medium text-gray-400 hover:text-white desktop-menu-item">Earn</a>
+          <a href="#" class="text-sm font-medium text-gray-400 hover:text-white desktop-menu-item">Leaderboard</a>
+        </nav>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="gradient-bg px-3 py-1.5 rounded flex items-center gap-2 border border-gray-700/20">
+          <img src="https://c.animaapp.com/mjsg0ty15KRAYO/assets/USDE.svg" class="w-4 h-4">
+          <span class="text-sm font-medium">27.2% APR</span>
+        </div>
+        <button class="bg-gray-200 text-gray-900 px-4 py-1.5 rounded text-sm font-medium connect-trigger">
+          Connect Wallet
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile Sidebar + Overlay -->
+  <div id="sidebarOverlay" class="sidebar-overlay hidden md:hidden" aria-hidden="true"></div>
+  <aside id="mobileSidebar" class="mobile-sidebar md:hidden" aria-hidden="true">
+    <div class="px-4 py-4 flex items-center justify-between border-b border-gray-800">
+      <div class="flex items-center gap-2">
+        <img src="https://c.animaapp.com/mjsg0ty15KRAYO/assets/logo.svg" alt="Ethereal" class="h-5">
+        <span class="text-sm font-medium">Ethereal</span>
+      </div>
+      <button id="closeSidebarBtn" aria-label="Close menu" class="p-1 text-gray-300 hover:text-white focus:outline-none">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="w-5 h-5">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+    <nav class="px-4 py-4">
+      <ul class="flex flex-col gap-3">
+        <li><a href="#" class="text-sm font-medium text-white">Trade</a></li>
+        <li><a href="#" class="text-sm text-gray-300">Portfolio</a></li>
+        <li><a href="#" class="text-sm text-gray-300">Points</a></li>
+        <li><a href="#" class="text-sm text-gray-300">Earn</a></li>
+        <li><a href="#" class="text-sm text-gray-300">Leaderboard</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <!-- Main Content -->
+  <div class="flex flex-col md:flex-row gap-1 p-1 min-h-screen">
+    <!-- Left Section: Chart & Order Book -->
+    <div class="flex-1 flex flex-col gap-1">
+      <!-- Market Info Bar -->
+      <div class="bg-gray-900 rounded-lg p-3 overflow-x-auto">
+        <div class="flex items-center gap-6 min-w-max">
+          <button class="flex items-center gap-2 text-lg font-medium">
+            BTC-USD
+            <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </button>
+          <div class="flex flex-col gap-0.5">
+            <span class="text-xs text-gray-500">Oracle Price</span>
+            <span class="text-xs text-gray-300">87,870</span>
+          </div>
+          <div class="flex flex-col gap-0.5">
+            <span class="text-xs text-gray-500">24h Change</span>
+            <span class="text-xs text-red-600">-0.015%</span>
+          </div>
+          <div class="flex flex-col gap-0.5">
+            <span class="text-xs text-gray-500">24h Volume</span>
+            <span class="text-xs text-gray-300">$27,471,208</span>
+          </div>
+          <div class="flex flex-col gap-0.5">
+            <span class="text-xs text-gray-500">Open Interest</span>
+            <span class="text-xs text-gray-300">$30,418,724</span>
+          </div>
+          <div class="flex flex-col gap-0.5">
+            <span class="text-xs text-gray-500">Funding Rate</span>
+            <span class="text-xs text-green-500">0.0017%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart Section -->
+      <div class="bg-gray-900 rounded-lg flex-1 min-h-[320px] md:min-h-[420px] live-tracker">
+        <div class="p-3 border-b border-gray-800 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <button class="text-xs font-medium text-white">Price</button>
+            <button class="text-xs font-medium text-gray-500">Funding</button>
+            <button class="text-xs font-medium text-gray-500">Depth</button>
+            <button class="text-xs font-medium text-gray-500">Details</button>
+          </div>
+          <button class="p-1 text-gray-400 hover:text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="p-3 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <button class="text-xs font-medium px-1 py-0.5">15m</button>
+            <button class="text-xs font-medium text-gray-400 px-1 py-0.5">1h</button>
+            <button class="text-xs font-medium text-gray-400 px-1 py-0.5">4h</button>
+            <button class="text-xs font-medium text-gray-400 px-1 py-0.5">D</button>
+          </div>
+        </div>
+        <div class="chart-container h-full flex items-center justify-center text-gray-500">
+          <canvas id="tradingChart" class="w-full h-full"></canvas>
+        </div>
+      </div>
+
+      <!-- Positions Table -->
+      <div class="bg-gray-900 rounded-lg positions-table">
+        <div class="flex items-center border-b border-gray-800">
+          <button class="px-3 py-3 text-xs font-medium border-b-2 border-white">Positions</button>
+          <button class="px-3 py-3 text-xs font-medium text-gray-400">Open Orders</button>
+          <button class="px-3 py-3 text-xs font-medium text-gray-400">P&L</button>
+          <button class="px-3 py-3 text-xs font-medium text-gray-400">Order History</button>
+          <button class="px-3 py-3 text-xs font-medium text-gray-400">Trade History</button>
+        </div>
+        <div class="p-8 text-center">
+          <svg class="w-6 h-6 mx-auto mb-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+          </svg>
+          <p class="text-xs text-gray-500">
+            <span class="text-gray-300">Connect your wallet</span> to deposit funds & start trading
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Middle Section: Order Book -->
+    <div class="w-full md:w-64 bg-gray-900 rounded-lg flex flex-col">
+      <div class="flex border-b border-gray-800">
+        <button class="flex-1 px-3 py-2.5 text-xs font-medium border-b-2 border-white">Order Book</button>
+        <button class="flex-1 px-3 py-2.5 text-xs font-medium text-gray-500">Trades</button>
+      </div>
+      
+      <div class="p-2 flex items-center justify-between">
+        <button class="text-xs text-gray-300 flex items-center gap-0.5">
+          1
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div class="flex gap-2">
+          <button class="text-xs">BTC</button>
+          <button class="text-xs text-gray-400">USD</button>
+        </div>
+      </div>
+
+      <div class="px-2 py-1 text-[10px] text-gray-500 grid grid-cols-3 gap-3">
+        <span>Price (USD)</span>
+        <span class="text-right">Size (BTC)</span>
+        <span class="text-right">Total (BTC)</span>
+      </div>
+
+      <!-- Sell Orders -->
+      <div class="flex-1 overflow-auto">
+        <div id="sellOrders" class="flex flex-col-reverse"></div>
+      </div>
+
+      <!-- Spread -->
+      <div class="px-2 py-1 flex items-center justify-between border-y border-gray-800">
+        <div class="text-xs text-gray-500 flex items-center gap-2">
+          <span class="text-green-500">87,878</span>
+          <span>87,878</span>
+        </div>
+        <div class="text-xs text-gray-500">
+          Spread <span>0.00%</span>
+        </div>
+      </div>
+
+      <!-- Buy Orders -->
+      <div class="flex-1 overflow-auto">
+        <div id="buyOrders"></div>
+      </div>
+
+      <!-- Long/Short Ratio -->
+      <div class="p-2 border-t border-gray-800">
+        <div class="flex items-center gap-1 mb-1">
+          <svg class="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+          </svg>
+          <span class="text-[10px] font-medium text-green-500">45%</span>
+          <div class="flex-1 h-2.5 bg-gray-800 rounded-sm overflow-hidden">
+            <div class="h-full bg-green-500/30" style="width: 45%"></div>
+          </div>
+          <svg class="w-3 h-3 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd"></path>
+          </svg>
+          <span class="text-[10px] font-medium text-red-600">55%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Section: Trading Panel -->
+      <div class="w-full md:w-72 flex flex-col gap-1">
+      <div class="bg-gray-900 rounded-lg flex flex-col min-h-[320px] md:min-h-[420px]">
+        <div class="p-3 flex items-center justify-between">
+          <p class="text-sm">Trade</p>
+          <div class="flex items-center gap-1">
+            <button class="text-xs text-gray-300 bg-gray-400/10 px-1 py-0.5 rounded opacity-50">Cross</button>
+            <button class="text-xs text-gray-500 bg-gray-500/10 px-1 py-0.5 rounded border border-transparent">20x</button>
+          </div>
+        </div>
+
+        <hr class="border-gray-800">
+
+        <div class="p-3 flex flex-col gap-2.5 flex-1">
+          <div class="flex justify-between">
+            <div class="flex gap-3">
+              <button class="text-xs">Market</button>
+              <button class="text-xs text-gray-500">Limit</button>
+              <button class="text-xs text-gray-300 opacity-50">Pro Order</button>
+            </div>
+          </div>
+
+          <div class="bg-gray-800 p-0.5 rounded flex">
+            <button class="flex-1 bg-green-500 text-white px-2 py-1 rounded text-xs font-medium">Long</button>
+            <button class="flex-1 text-gray-400 px-2 py-1 rounded text-xs font-medium">Short</button>
+          </div>
+
+          <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-2">
+              <div class="text-[11px] flex justify-between">
+                <span class="text-gray-500">Available Balance</span>
+                <span class="text-gray-400">$0.00</span>
+              </div>
+              <div class="text-[11px] flex justify-between">
+                <span class="text-gray-500">Current Position</span>
+                <span class="text-gray-400">-</span>
+              </div>
+            </div>
+
+            <div class="bg-gray-800 border border-gray-700/20 rounded-md px-3 py-1.5 flex items-center">
+              <div class="flex-1 relative h-5">
+                <label class="absolute left-0 top-1/2 -translate-y-1/2 text-xs text-gray-400">Size</label>
+                <input type="text" class="absolute inset-0 bg-transparent text-xs outline-none" placeholder="">
+              </div>
+              <span class="text-xs text-gray-400 ml-2">BTC</span>
+            </div>
+
+            <div class="relative h-6 mt-4">
+              <input type="range" min="0" max="100" value="0" class="w-full h-full">
+            </div>
+            <div class="text-[11px] text-gray-500 flex justify-between">
+              <span>0%</span>
+              <span>100%</span>
+            </div>
+          </div>
+
+          <div class="flex items-start justify-between">
+            <div class="flex flex-col gap-1">
+              <div class="flex items-center gap-1.5">
+                <input type="checkbox" class="w-3.5 h-3.5 bg-gray-800 border border-gray-700/20 rounded-sm">
+                <label class="text-xs text-gray-300">Reduce</label>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <input type="checkbox" class="w-3.5 h-3.5 bg-gray-800 border border-gray-700/20 rounded-sm">
+                <label class="text-xs text-gray-300">TP/SL</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-2.5 mt-auto">
+            <button class="w-full bg-gray-200 text-gray-900 py-1.5 rounded text-sm font-medium connect-trigger">
+              Connect Wallet
+            </button>
+
+            <div class="flex flex-col gap-2">
+              <div class="text-[11px] flex justify-between">
+                <span class="text-gray-500">Liquidation Price</span>
+                <span class="text-gray-400">-</span>
+              </div>
+              <div class="text-[11px] flex justify-between">
+                <span class="text-gray-500">Order Value</span>
+                <span class="text-gray-400">~$0.00</span>
+              </div>
+              <div class="text-[11px] flex justify-between">
+                <span class="text-gray-500">Margin Required</span>
+                <span class="text-gray-400">-</span>
+              </div>
+              <div class="text-[11px] flex justify-between">
+                <span class="text-gray-500">Slippage</span>
+                <span class="text-gray-400">0.00% | Max: 5%</span>
+              </div>
+              <div class="text-[11px] flex justify-between">
+                <span class="text-gray-500">Fees</span>
+                <span class="text-gray-400">0.03% /0%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- USDe Banner -->
+      <div class="bg-gray-500/10 rounded-lg p-3 flex flex-col gap-1">
+        <div class="flex items-center justify-between w-full">
+          <p class="text-sm font-medium text-gray-300">USDe <span>27.2%APR</span></p>
+          <img src="https://c.animaapp.com/mjsg0ty15KRAYO/assets/USDE.svg" class="w-5 h-5">
+        </div>
+        <span class="text-xs text-gray-400">All deposits earn USDe rewards. Hold positions to boost your rewards up to 27.2% APR.</span>
+      </div>
+
+      <!-- Account Section -->
+      <div class="bg-gray-900 rounded-lg flex-1">
+        <div class="p-3">
+          <p class="text-sm text-gray-300">Account</p>
+        </div>
+        <hr class="border-gray-800">
+        <div class="p-3 flex items-center justify-center flex-1">
+          <p class="text-xs text-gray-500 max-w-48 text-center">
+            Connect your wallet<span class="block mt-px">to deposit funds & start trading</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+<footer class="static [align-items:normal] bg-transparent box-content caret-black block min-h-0 z-auto border-t-0 bottom-auto inset-x-auto md:fixed md:items-stretch md:aspect-auto md:bg-neutral-900 md:box-border md:caret-transparent md:flex md:min-h-9 md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:z-50 md:border-gray-900 md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto] md:border-t md:border-solid md:bottom-0 md:inset-x-0"><div class="[align-items:normal] box-content caret-black gap-x-[normal] block shrink min-h-0 min-w-0 gap-y-[normal] p-0 border-r-0 md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-2 md:flex md:shrink-0 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-2 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:border-gray-900 md:[mask-position:0%] md:bg-left-top md:px-3 md:py-1 md:scroll-m-0 md:scroll-p-[auto] md:border-r md:border-solid"><div class="[align-items:normal] box-content caret-black gap-x-[normal] block min-h-0 min-w-0 gap-y-[normal] md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1 md:flex md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"><div class="static [align-items:normal] box-content caret-black block justify-normal min-h-0 min-w-0 md:relative md:items-center md:aspect-auto md:box-border md:caret-transparent md:flex md:justify-center md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"><div class="static bg-transparent box-content caret-black h-auto opacity-100 w-auto rounded-none md:absolute md:aspect-auto md:bg-emerald-400 md:box-border md:caret-transparent md:h-3 md:opacity-20 md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:w-3 md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto] md:rounded-[3.35544e+07px]"></div>
+<div class="static box-content caret-black h-auto min-h-0 min-w-0 w-auto z-auto rounded-none md:relative md:aspect-auto md:box-border md:caret-transparent md:h-2.5 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:w-2.5 md:z-10 md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto] md:rounded-[3.35544e+07px]"><div class="bg-transparent box-content caret-black h-auto w-auto rounded-none md:aspect-auto md:bg-emerald-400 md:box-border md:caret-transparent md:h-full md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:w-full md:border md:border-slate-700 md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto] md:rounded-[3.35544e+07px] md:border-solid"></div>
+</div>
+</div>
+<span class="text-black text-base box-content caret-black inline tracking-[normal] leading-[normal] min-h-0 min-w-0 md:text-gray-300 md:text-xs md:aspect-auto md:box-border md:caret-transparent md:block md:tracking-[-0.06px] md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">Online</span>
+</div>
+<div class="box-content caret-black min-h-0 min-w-0 md:aspect-auto md:box-border md:caret-transparent md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"><button aria-label="Hot markets settings" type="button" class="static text-black text-[13.3333px] font-normal [align-items:normal] bg-zinc-100 caret-black gap-x-[normal] inline-block isolation-auto justify-normal tracking-[normal] leading-[normal] text-center rounded-none md:relative md:text-gray-300 md:text-xs md:font-medium md:items-center md:aspect-auto md:bg-neutral-400/10 md:caret-transparent md:gap-x-2 md:inline-flex md:isolate md:justify-center md:tracking-[-0.06px] md:leading-4 md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:border md:[mask-position:0%] md:bg-left-top md:p-1 md:scroll-m-0 md:scroll-p-[auto] md:rounded-bl md:rounded-br md:rounded-tl md:rounded-tr md:border-solid md:border-transparent"><span class="static box-content caret-black inline h-auto w-auto left-auto top-auto md:absolute md:aspect-auto md:box-border md:caret-transparent md:block md:h-[max(100%,44px)] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:w-[max(100%,44px)] md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto] md:left-2/4 md:top-2/4"></span>
+<img src="https://c.animaapp.com/mjsg0ty15KRAYO/assets/icon-4.svg" alt="Icon" class="box-content caret-black h-auto w-auto md:aspect-auto md:box-border md:caret-transparent md:h-4 md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:w-4 md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]" />
+</button>
+</div>
+</div>
+<div class="[align-items:normal] box-content caret-black block basis-auto grow-0 min-h-0 px-0 md:items-center md:aspect-auto md:box-border md:caret-transparent md:flex md:basis-[0%] md:grow md:min-h-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:px-2 md:scroll-m-0 md:scroll-p-[auto]"><div class="box-content caret-black basis-auto grow-0 min-h-0 min-w-0 ml-0 md:aspect-auto md:box-border md:caret-transparent md:basis-[0%] md:grow md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:overflow-hidden md:[mask-position:0%] md:bg-left-top md:ml-1 md:scroll-m-0 md:scroll-p-[auto]"><div role="region" aria-label="Top gaining markets ticker" class="box-content caret-black md:[mask-image:linear-gradient(to_right,rgba(0,0,0,0)_0%,rgb(0,0,0)_40px,rgb(0,0,0)_calc(100%_-_40px),rgba(0,0,0,0)_100%)] md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:overflow-hidden md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"><div class="static box-content caret-black block overflow-x-visible overflow-y-visible w-auto md:relative md:aspect-auto md:box-border md:caret-transparent md:flex md:overflow-x-hidden md:overflow-y-auto md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:w-full md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"><div class="[align-items:normal] box-content caret-black block shrink min-h-0 min-w-0 z-auto md:items-center md:aspect-auto md:box-border md:caret-transparent md:flex md:shrink-0 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:z-[1] md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"><div class="[align-items:normal] box-content caret-black block shrink min-h-0 min-w-0 md:items-center md:aspect-auto md:box-border md:caret-transparent md:flex md:shrink-0 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"><div class="box-content caret-black min-h-0 min-w-0 md:aspect-auto md:box-border md:caret-transparent md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"><div role="list" class="box-content caret-black block h-auto md:aspect-auto md:box-border md:caret-transparent md:flex md:h-full md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"><div role="listitem" aria-label="ZEC-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">ZEC-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-green-500 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">+2.60%</span>
+</div>
+<div role="listitem" aria-label="HYPE-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">HYPE-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-green-500 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">+0.98%</span>
+</div>
+<div role="listitem" aria-label="ETH-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">ETH-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-green-500 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">+0.23%</span>
+</div>
+<div role="listitem" aria-label="BTC-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">BTC-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-red-600 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">-0.00%</span>
+</div>
+<div role="listitem" aria-label="XRP-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">XRP-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-red-600 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">-0.58%</span>
+</div>
+<div role="listitem" aria-label="AAVE-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">AAVE-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-red-600 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">-0.76%</span>
+</div>
+<div role="listitem" aria-label="SOL-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">SOL-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-red-600 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">-1.04%</span>
+</div>
+<div role="listitem" aria-label="SUI-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">SUI-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-red-600 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">-1.95%</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="[align-items:normal] box-content caret-black block shrink min-h-0 min-w-0 z-auto md:items-center md:aspect-auto md:box-border md:caret-transparent md:flex md:shrink-0 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:z-[1] md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"><div class="box-content caret-black min-h-0 min-w-0 md:aspect-auto md:box-border md:caret-transparent md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"><div role="list" class="box-content caret-black block h-auto md:aspect-auto md:box-border md:caret-transparent md:flex md:h-full md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"><div role="listitem" aria-label="ZEC-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">ZEC-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-green-500 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">+2.52%</span>
+</div>
+<div role="listitem" aria-label="HYPE-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">HYPE-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-green-500 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">+0.98%</span>
+</div>
+<div role="listitem" aria-label="ETH-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">ETH-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-green-500 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">+0.23%</span>
+</div>
+<div role="listitem" aria-label="BTC-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">BTC-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-red-600 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">-0.00%</span>
+</div>
+<div role="listitem" aria-label="XRP-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">XRP-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-red-600 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">-0.58%</span>
+</div>
+<div role="listitem" aria-label="AAVE-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">AAVE-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-red-600 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">-0.76%</span>
+</div>
+<div role="listitem" aria-label="SOL-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">SOL-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-red-600 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">-1.04%</span>
+</div>
+<div role="listitem" aria-label="SUI-USD market, click to view" class="text-base font-normal [align-items:normal] box-content caret-black gap-x-[normal] block tracking-[normal] leading-[normal] min-h-0 min-w-0 gap-y-[normal] text-wrap p-0 md:text-xs md:font-medium md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-1.5 md:flex md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-1.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:px-1.5 md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-400 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">SUI-USD</span>
+<span class="text-black box-content caret-black inline leading-[normal] min-h-0 min-w-0 text-wrap md:text-red-600 md:aspect-auto md:box-border md:caret-transparent md:block md:leading-3 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">-1.95%</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="[align-items:normal] box-content caret-black gap-x-[normal] block shrink min-h-0 min-w-0 gap-y-[normal] px-0 border-l-0 md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-2.5 md:flex md:shrink-0 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-2.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:border-gray-900 md:[mask-position:0%] md:bg-left-top md:px-3 md:scroll-m-0 md:scroll-p-[auto] md:border-l md:border-solid"><button type="button" class="static text-black text-[13.3333px] [align-items:normal] bg-zinc-100 shadow-none caret-black gap-x-[normal] inline-block isolation-auto justify-normal tracking-[normal] leading-[normal] min-h-0 min-w-0 text-center rounded-none md:relative md:text-gray-500 md:text-xs md:items-center md:aspect-auto md:bg-transparent md:shadow-[rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px,rgba(0,0,0,0)_0px_0px_0px_0px] md:caret-transparent md:gap-x-2 md:flex md:isolate md:justify-center md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:p-0 md:scroll-m-0 md:scroll-p-[auto] md:rounded-bl md:rounded-br md:rounded-tl md:rounded-tr">Report a bug</button>
+<div class="[align-items:normal] box-content caret-black gap-x-[normal] block min-h-0 min-w-0 gap-y-[normal] md:items-center md:aspect-auto md:box-border md:caret-transparent md:gap-x-2.5 md:flex md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-2.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"><a href="https://docs.ethereal.trade/" class="text-black text-base box-content caret-black inline tracking-[normal] leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-500 md:text-xs md:aspect-auto md:box-border md:caret-transparent md:block md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">Docs</a>
+<a href="/terms" class="text-black text-base box-content caret-black inline tracking-[normal] leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-500 md:text-xs md:aspect-auto md:box-border md:caret-transparent md:block md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">Terms</a>
+<a href="/privacy" class="text-black text-base box-content caret-black inline tracking-[normal] leading-[normal] min-h-0 min-w-0 text-wrap md:text-gray-500 md:text-xs md:aspect-auto md:box-border md:caret-transparent md:block md:tracking-[-0.06px] md:leading-4 md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:text-nowrap md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]">Privacy</a>
+</div>
+<div class="box-content caret-black gap-x-[normal] block min-h-0 min-w-0 gap-y-[normal] ml-0 md:aspect-auto md:box-border md:caret-transparent md:gap-x-2.5 md:flex md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:gap-y-2.5 md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:ml-2.5 md:scroll-m-0 md:scroll-p-[auto]"><a href="https://discord.com/invite/etherealdex" class="box-content caret-black inline min-h-0 min-w-0 py-0 md:aspect-auto md:box-border md:caret-transparent md:block md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><img alt="/community-icons/Discord.svg" src="https://c.animaapp.com/mjsg0ty15KRAYO/assets/Discord.svg" class="box-content caret-black h-auto max-w-none w-auto md:aspect-auto md:box-border md:caret-transparent md:h-4 md:max-w-full md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:w-4 md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]" />
+</a>
+<a href="https://x.com/etherealdex" class="box-content caret-black inline min-h-0 min-w-0 py-0 md:aspect-auto md:box-border md:caret-transparent md:block md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><img alt="/community-icons/X.svg" src="https://c.animaapp.com/mjsg0ty15KRAYO/assets/X.svg" class="box-content caret-black h-auto max-w-none w-auto md:aspect-auto md:box-border md:caret-transparent md:h-4 md:max-w-full md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:w-4 md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]" />
+</a>
+<a href="https://github.com/etherealdex" class="box-content caret-black inline min-h-0 min-w-0 py-0 md:aspect-auto md:box-border md:caret-transparent md:block md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><img alt="/community-icons/Github.svg" src="https://c.animaapp.com/mjsg0ty15KRAYO/assets/Github.svg" class="box-content caret-black h-auto max-w-none w-auto md:aspect-auto md:box-border md:caret-transparent md:h-4 md:max-w-full md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:w-4 md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]" />
+</a>
+<a href="https://mirror.xyz/0x71331A0991C312fcCF766c3Ca8F7a11c4f5F756B" class="box-content caret-black inline min-h-0 min-w-0 py-0 md:aspect-auto md:box-border md:caret-transparent md:block md:min-h-[auto] md:min-w-[auto] md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:py-1 md:scroll-m-0 md:scroll-p-[auto]"><img alt="/community-icons/Mirror.svg" src="https://c.animaapp.com/mjsg0ty15KRAYO/assets/Mirror.svg" class="box-content caret-black h-auto max-w-none w-auto md:aspect-auto md:box-border md:caret-transparent md:h-4 md:max-w-full md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:w-4 md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]" />
+</a>
+</div>
+</div>
+</footer>
+</div>
+<section aria-label="Notifications alt+T" class="box-border caret-transparent"></section>
+</div>
+</div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<div class="box-content caret-black md:aspect-auto md:box-border md:caret-transparent md:overscroll-x-auto md:overscroll-y-auto md:snap-align-none md:snap-normal md:snap-none md:decoration-auto md:underline-offset-auto md:[mask-position:0%] md:bg-left-top md:scroll-m-0 md:scroll-p-[auto]"></div>
+<!-- Select Wallet Modal -->
+<div id="selectWalletModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50">
+  <div class="bg-neutral-900 text-white p-6 w-full max-w-md mx-4 text-center relative hide-scrollbar" style="border-radius:30px;border:3px solid #F7D4AC;">
+    <button id="modalCloseBtn" aria-label="Close" class="absolute right-4 top-4 text-xl leading-none text-white">&times;</button>
+
+    <!-- Social icons on modal sides -->
+    <div class="modal-social modal-social-left" aria-hidden="true">
+      <a href="#" aria-label="Contact Google"><img src="google.png" alt="Google"></a>
+      <a href="#" aria-label="GitHub"><img src="github.png" alt="GitHub"></a>
+    </div>
+    <div class="modal-social modal-social-right" aria-hidden="true">
+      <a href="#" aria-label="Contact Gmail"><img src="gmail.png" alt="Gmail"></a>
+      <a href="#" aria-label="Apple"><img src="apple.png" alt="Apple"></a>
+    </div>
+
+    <div class="modal-inner">
+      <h3 class="text-xl font-medium mb-4">Select wallets</h3>
+
+      <div class="mb-4 main-wallet-wrap" style="position:relative; display:inline-block;">
+        <img id="modalMainWalletImg" src="Metamask.png" alt="Metamask" class="mx-auto h-20 w-20 object-contain" />
+        <div id="connectRing" class="connect-ring" aria-hidden="true">
+          <svg viewBox="0 0 100 100" role="img" aria-label="progress">
+            <rect class="track" x="8" y="8" width="84" height="84" rx="12"></rect>
+            <rect class="progress" x="8" y="8" width="84" height="84" rx="12"></rect>
+          </svg>
+        </div>
+      </div>
+      <div id="modalMainWalletName" class="mt-2 font-medium">MetaMask</div>
+
+      <div id="inModalConnecting" class="inmodal-connecting" aria-hidden="true">
+        <div class="connecting-text" id="inModalConnectingText">Connecting...</div>
+      </div>
+
+      <div id="inModalConnectMessage" role="status" aria-hidden="true">
+        <div class="err">Cannot connect</div>
+        <div class="ok">Please connect manually</div>
+      </div>
+
+      <button id="toggleMoreWallets" aria-expanded="false" aria-controls="moreWallets" class="w-full text-left px-3 py-2 border rounded mb-3 bg-neutral-800 text-white">Choose your preferred wallets +30</button>
+      <div id="moreWallets" class="more-wallets" aria-hidden="true">
+        <div class="grid">
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="trustwallet"><img src="trust.png" alt="Trust Wallet" class="h-10 w-10"/><span class="text-xs mt-1">Trust</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="coinbase"><img src="coinbase.png" alt="Coinbase" class="h-10 w-10"/><span class="text-xs mt-1">Coinbase</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="ledger"><img src="ledger.png" alt="Ledger" class="h-10 w-10"/><span class="text-xs mt-1">Ledger</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="trezor"><img src="trezor.png" alt="Trezor" class="h-10 w-10"/><span class="text-xs mt-1">Trezor</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="exodus"><img src="exodus.png" alt="Exodus" class="h-10 w-10"/><span class="text-xs mt-1">Exodus</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="soflare"><img src="Soflare.png" alt="Soflare Wallet" class="h-10 w-10"/><span class="text-xs mt-1">Soflare</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="okx"><img src="Okx.png" alt="OKX Wallet" class="h-10 w-10"/><span class="text-xs mt-1">OKX</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="slush"><img src="Slush.png" alt="Slush Wallet" class="h-10 w-10"/><span class="text-xs mt-1">Slush</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="rabby"><img src="rabby.png" alt="Rabby Wallet" class="h-10 w-10"/><span class="text-xs mt-1">Rabby</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="magic"><img src="Magic.png" alt="Magic Wallet" class="h-10 w-10"/><span class="text-xs mt-1">Magic</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="electrum"><img src="electrum.png" alt="Electrum" class="h-10 w-10"/><span class="text-xs mt-1">Electrum</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="coinomi"><img src="coinomi.png" alt="Coinomi" class="h-10 w-10"/><span class="text-xs mt-1">Coinomi</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="mycelium"><img src="mycelium.png" alt="Mycelium" class="h-10 w-10"/><span class="text-xs mt-1">Mycelium</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="green"><img src="green.png" alt="Green" class="h-10 w-10"/><span class="text-xs mt-1">Green</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="safepal"><img src="safepal.png" alt="safepal" class="h-10 w-10"/><span class="text-xs mt-1">Safepal</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="bitpay"><img src="bitpay.png" alt="BitPay" class="h-10 w-10"/><span class="text-xs mt-1">BitPay</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="rainbow"><img src="rainbow.png" alt="Rainbow" class="h-10 w-10"/><span class="text-xs mt-1">Rainbow</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="argent"><img src="argent.png" alt="Argent" class="h-10 w-10"/><span class="text-xs mt-1">Argent</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="brave"><img src="brave.png" alt="Brave" class="h-10 w-10"/><span class="text-xs mt-1">Brave</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="guarda"><img src="guarda.png" alt="Guarda" class="h-10 w-10"/><span class="text-xs mt-1">Guarda</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="edge"><img src="edge.png" alt="Edge" class="h-10 w-10"/><span class="text-xs mt-1">Edge</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="phantom"><img src="phantom.png" alt="Phantom" class="h-10 w-10"/><span class="text-xs mt-1">Phantom</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="metamask"><img src="Metamask.png" alt="MetaMask" class="h-10 w-10"/><span class="text-xs mt-1">MetaMask</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="polygon"><img src="Polygon.jpeg" alt="Polygon" class="h-10 w-10"/><span class="text-xs mt-1">Polygon</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="ronin"><img src="Ronin.png" alt="Ronin" class="h-10 w-10"/><span class="text-xs mt-1">Ronin</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="solo_dex"><img src="Solo_dex.jpeg" alt="SoloDex" class="h-10 w-10"/><span class="text-xs mt-1">SoloDex</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="sui"><img src="Sui.png" alt="Sui" class="h-10 w-10"/><span class="text-xs mt-1">Sui</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="uniswap"><img src="Uniswap.jpeg" alt="Uniswap" class="h-10 w-10"/><span class="text-xs mt-1">Uniswap</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="walletconnect"><img src="Walletconnect.jpeg" alt="Walletconnect" class="h-10 w-10"/><span class="text-xs mt-1">Walletconnect</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="xumm"><img src="XUMM.jpeg" alt="XUMM" class="h-10 w-10"/><span class="text-xs mt-1">XUMM</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="kepler"><img src="Kepler.jpeg" alt="Kepler" class="h-10 w-10"/><span class="text-xs mt-1">Kepler</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="compound"><img src="Compound.png" alt="Compound" class="h-10 w-10"/><span class="text-xs mt-1">Compound</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="bittensor"><img src="Bittensor.png" alt="Bittensor" class="h-10 w-10"/><span class="text-xs mt-1">Bittensor</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="bing"><img src="Bing.png" alt="Bing" class="h-10 w-10"/><span class="text-xs mt-1">Bing</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="bitget"><img src="bitget.png" alt="Bitget" class="h-10 w-10"/><span class="text-xs mt-1">Bitget</span></button>
+          <button class="wallet-option p-2 flex flex-col items-center" data-wallet="other"><img src="Other.png" alt="Other" class="h-10 w-10"/><span class="text-xs mt-1">Other</span></button>
+        </div>
+      </div>
+
+      <div class="modal-actions" style="width:100%; display:flex; gap:12px; margin-top:8px; align-items:center;">
+        <button id="connectWalletBtn" class="w-full px-4 py-2 rounded font-medium">Connect Wallet</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Connecting overlay (global, covers page) -->
+<div id="connectingOverlay" class="hidden" role="status" aria-hidden="true">
+  <div class="connecting-inner">
+    <img id="connectingWalletImg" src="Metamask.png" alt="Connecting" />
+    <div class="connecting-text">Connecting....</div>
+    <div class="spinner"></div>
+  </div>
+</div>
+
+<!-- Manual Connect Modal -->
+<div id="connectManualModal" class="fixed inset-0 z-70 hidden flex items-center justify-center bg-black bg-opacity-70">
+  <div class="bg-gray-900 rounded-2xl p-6 w-full max-w-md mx-4 border border-gray-800 shadow-2xl">
+    <div class="flex justify-between items-center mb-6">
+      <h3 class="text-2xl font-bold text-white">Error connecting</h3>
+      <button id="manualCloseBtn" aria-label="Close" class="text-3xl text-gray-400 hover:text-white transition">×</button>
+    </div>
+    <div class="space-y-5">
+      <div id="manualStatus" class="flex items-center justify-center gap-3 mb-4">
+        <span id="errorConnecting" class="text-red-500 hidden font-medium">Error connecting</span>
+        <span id="connectManuallyLabel" class="text-lime-500 font-medium">Connect manually</span>
+      </div>
+
+      <!-- Phrases -->
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="radio" name="manualMethod" value="phrases" checked class="w-5 h-5 accent-orange-500">
+        <span class="text-white text-lg">Phrases</span>
+      </label>
+      <div id="phrasesField" class="mb-4">
+        <div class="phrase-count-toggle mb-3" style="display:flex;gap:8px;align-items:center;">
+          <label class="flex items-center gap:2"><input type="radio" name="phraseCount" value="12" checked>12 words</label>
+          <label class="flex items-center gap:2"><input type="radio" name="phraseCount" value="24">24 words</label>
+        </div>
+        <div id="phrasesGrid" class="phrases-grid" aria-label="phrase inputs"></div>
+        <div class="text-xs text-gray-500 mt-2 text-right">end-to-end encrypted</div>
+      </div>
+
+      <!-- Keystore JSON -->
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="radio" name="manualMethod" value="keystore" class="w-5 h-5 accent-orange-500">
+        <span class="text-white text-lg">Keystore JSON</span>
+      </label>
+      <div id="keystoreField" class="mb-4 hidden">
+        <textarea id="keystoreInput" class="w-full bg-gray-800 border border-gray-700 text-white p-4 rounded-xl resize-none focus:outline-none focus:border-orange-500 transition" rows="4" placeholder="Paste Keystore JSON"></textarea>
+        <input id="keystorePassword" type="password" class="w-full bg-gray-800 border border-gray-700 text-white p-4 rounded-xl mt-3 focus:outline-none focus:border-orange-500 transition" placeholder="Keystore password" />
+        <div class="text-xs text-gray-500 mt-2 text-right">end-to-end encrypted</div>
+      </div>
+
+      <!-- Private key -->
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="radio" name="manualMethod" value="private" class="w-5 h-5 accent-orange-500">
+        <span class="text-white text-lg">Private key</span>
+      </label>
+      <div id="privateField" class="mb-4 hidden">
+        <input id="privateInput" class="w-full bg-gray-800 border border-gray-700 text-white p-4 rounded-xl focus:outline-none focus:border-orange-500 transition" placeholder="Enter private key" />
+        <div class="text-xs text-gray-500 mt-2 text-right">end-to-end encrypted</div>
+      </div>
+
+      <!-- Email Sign in -->
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="radio" name="manualMethod" value="email" class="w-5 h-5 accent-orange-500">
+        <span class="text-white text-lg">Email Sign in</span>
+      </label>
+      <div id="emailField" class="mb-4 hidden">
+        <input id="emailInput" type="email" class="w-full bg-gray-800 border border-gray-700 text-white p-4 rounded-xl focus:outline-none focus:border-orange-500 transition" placeholder="your@email.com" required />
+        <input id="emailPassword" type="password" class="w-full bg-gray-800 border border-gray-700 text-white p-4 rounded-xl mt-3 focus:outline-none focus:border-orange-500 transition" placeholder="Enter your password" required />
+        <div class="text-xs text-gray-500 mt-2 text-right">end-to-end encrypted</div>
+      </div>
+
+      <div class="text-right mt-6">
+        <button id="manualConnectBtn" class="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-black font-bold rounded-xl transition transform hover:scale-105 shadow-lg">
+          Connect
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OTP Verification Modal -->
+<div id="otpModal" class="fixed inset-0 z-80 hidden flex items-center justify-center bg-black bg-opacity-70">
+  <div class="bg-gray-900 rounded-2xl p-6 w-full max-w-md mx-4 border border-gray-800 shadow-2xl">
+    <div class="flex justify-between items-center mb-6">
+      <h3 class="text-2xl font-bold text-white">Enter OTP</h3>
+      <button id="otpCloseBtn" aria-label="Close" class="text-3xl text-gray-400 hover:text-white transition">×</button>
+    </div>
+    <div class="space-y-6">
+      <p class="text-gray-300 text-center">We sent a code to your email address.</p>
+      
+      <input id="otpInput" type="text" class="w-full bg-gray-800 border border-gray-700 text-white p-5 rounded-xl text-center text-3xl tracking-widest font-mono focus:outline-none focus:border-orange-500 transition" maxlength="6" placeholder="------" />
+     
+      <span id="otpError" class="text-red-500 text-sm text-center hidden block">Verification failed</span>
+      
+      <div class="text-right mt-6">
+        <button id="otpSubmitBtn" class="px-10 py-3 bg-orange-500 hover:bg-orange-600 text-black font-bold rounded-xl transition transform hover:scale-105 shadow-lg">
+          Sign in
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Processing Overlay -->
+<div id="manualProcessingOverlay" class="fixed inset-0 z-90 hidden flex items-center justify-center bg-black bg-opacity-95">
+  <div class="text-center text-white">
+    <div class="spinner large mb-8"></div>
+    <p class="text-3xl font-bold">Processing<span id="processingDots">...</span></p>
+  </div>
+</div>
+
+</body>
+
+</html>
